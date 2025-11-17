@@ -1,0 +1,9 @@
+# Ignore the large downloaded CIFAR-10 data archive
+data/cifar-10-python.tar.gz
+
+# Ignore all other downloaded data folders
+data/
+
+# Ignore Python caches
+__pycache__/
+*.pyc
