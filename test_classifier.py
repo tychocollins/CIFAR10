@@ -1,61 +1,90 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
+import torch.nn as nn
+import torch.nn.functional as F
+import os
 
-# 1. Device Setup
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-print(f"Using {device} for testing.")
-
-
-# 2. Define the CNN Architecture (MUST MATCH simple_nn.py)
+# --- 1. MODEL ARCHITECTURE (DEEPER/WIDER - MUST MATCH simple_nn.py) ---
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
+        # 1st Conv Block
+        self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+        
+        # 2nd Conv Block
+        self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120) 
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10) 
-
+        
+        # 3rd Conv Block
+        self.conv3 = nn.Conv2d(64, 128, 3, padding=1)
+        self.bn3 = nn.BatchNorm2d(128)
+        
+        # Fully Connected Layers (Input size: 128 * 8 * 8)
+        self.fc1 = nn.Linear(128 * 8 * 8, 512) 
+        self.fc2 = nn.Linear(512, 10) 
+        
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
+        # 1st Conv + BN + ReLU
+        x = F.relu(self.bn1(self.conv1(x)))
+        
+        # 2nd Conv + BN + ReLU + Pool
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = self.pool(x)
+        
+        # 3rd Conv + BN + ReLU + Pool
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = self.pool(x)
+        
+        # Flattening: 128 * 8 * 8 = 8192 features
         x = torch.flatten(x, 1) 
+        
+        # Fully Connected Layers
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x) 
+        x = self.fc2(x)
         return x
 
-
-# 3. Main Execution Block for Loading and Testing
+# --- 2. CONFIGURATION AND LOADING ---
 if __name__ == '__main__':
-    print("\n--- Testing Saved Model ---")
-    
-    # Load the Model
-    PATH = './cifar_net.pth'
+    # Use CPU for loading/testing unless you specifically configure for GPU/MPS
+    device = torch.device("cpu") 
+
+    # Define the path to your saved model weights
+    # Note: Adjust './cifar_net.pth' if your file is in a different location
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    PATH = os.path.join(BASE_DIR, 'cifar_net.pth')
+
+    # Load the model structure and weights
     model = Net().to(device)
-    # Load the trained weights from the .pth file
+    
+    # Load the state dictionary from the saved file
     try:
         model.load_state_dict(torch.load(PATH, map_location=device))
-        model.eval() # Set model to evaluation mode
-        print(f"Successfully loaded trained model from {PATH}")
-    except FileNotFoundError:
-        print(f"Error: Model file {PATH} not found. Did you run simple_nn.py first?")
-        exit()
+        model.eval() # Set the model to evaluation mode
+        print("Model weights loaded successfully.")
+    except Exception as e:
+        print(f"Error loading model weights: {e}")
+        exit() # Exit if loading fails
 
-    # Data Setup (Needed to check accuracy)
-    transform = transforms.Compose(
-        [transforms.ToTensor(),
-         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=4, shuffle=False, num_workers=0)
+    # --- 3. DATA LOADING AND TRANSFORMATION (for testing) ---
+    # NOTE: The test transform should NOT include augmentation
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
 
-    # Calculate Accuracy
+    batch_size = 64
+    num_workers = 2
+
+    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+    # --- 4. ACCURACY CALCULATION ---
     correct = 0
     total = 0
+    
     with torch.no_grad():
         for data in testloader:
             images, labels = data[0].to(device), data[1].to(device)
@@ -64,28 +93,5 @@ if __name__ == '__main__':
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    print(f'Model loaded from file achieved an accuracy of: {100 * correct // total} %')
-
-    # 4. Individual Prediction Demo (Inference)
-    
-    # Get one batch of images and labels from the test set
-    dataiter = iter(testloader)
-    images, labels = next(dataiter)
-
-    # Move the images to the device the model is on (MPS)
-    images = images.to(device)
-    
-    # Run the single batch through the model
-    with torch.no_grad():
-        outputs = model(images)
-    
-    # Get the predicted class index (highest score)
-    _, predicted = torch.max(outputs, 1)
-
-    # CIFAR-10 classes tuple from the training file
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-    
-    # Print the results for the first 4 images in the batch
-    print("\n--- Individual Prediction ---")
-    print(f'True Labels:    {[classes[labels[j]] for j in range(4)]}')
-    print(f'Model Prediction: {[classes[predicted[j]] for j in range(4)]}')
+    accuracy = 100 * correct // total
+    print(f'Accuracy of the saved network on the 10000 test images: {accuracy} %')
