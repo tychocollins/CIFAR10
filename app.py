@@ -15,17 +15,23 @@ class Net(nn.Module):
         self.conv1 = nn.Conv2d(3, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
+        # 16*5*5 is the output size after two pooling layers
         self.fc1 = nn.Linear(16 * 5 * 5, 120) 
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10) 
 
-def forward(self, x):
+    def forward(self, x):
+        # Convolutional Layers
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
+        
+        # Flattening
         x = torch.flatten(x, 1) 
-        x = F.relu(self.fc1(x)) # CORRECT: Call the layer on the object self
-        x = F.relu(self.fc2(x)) # CORRECT: Call the layer on the object self
-        x = self.fc3(x)         # CORRECT: Call the layer on the object self
+        
+        # Fully Connected Layers (The correction is here: must use self.fcX(x))
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)         
         return x
 
 # --- 2. MODEL LOADING AND ACCURACY CALCULATION ---
@@ -35,7 +41,7 @@ def load_and_evaluate_model():
     # Setup paths and device
     device = torch.device("cpu") 
     
-    # Use the absolute path logic we fixed earlier for cloud deployment
+    # Use the absolute path logic we fixed for cloud deployment
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     PATH = os.path.join(BASE_DIR, 'cifar_net.pth')
     
@@ -45,13 +51,15 @@ def load_and_evaluate_model():
         model.load_state_dict(torch.load(PATH, map_location=device))
         model.eval()
     except Exception as e:
-        st.error(f"Error loading model weights: {e}")
+        # In case the .pth file is missing, show a clear error
+        st.error(f"Error loading model weights (cifar_net.pth): {e}")
         return None, 0
 
     # Accuracy Calculation (used for the header display)
     transform = transforms.Compose(
         [transforms.ToTensor(),
          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    
     # Note: CIFAR10 data is downloaded to a temporary location on the cloud
     testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
     testloader = torch.utils.data.DataLoader(testset, batch_size=4, shuffle=False, num_workers=0)
@@ -73,6 +81,7 @@ def load_and_evaluate_model():
 CLASSES = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 if __name__ == '__main__':
+    st.set_page_config(page_title="CIFAR-10 Classifier", layout="centered")
     st.title("CIFAR-10 Image Classifier Demo 🧠")
     
     # Load model and display performance metrics
@@ -80,7 +89,7 @@ if __name__ == '__main__':
     
     if model:
         st.markdown(f"**Loaded Model Accuracy (Test Set):** <span style='font-size: 24px; color: #4CAF50;'>{accuracy}%</span>", unsafe_allow_html=True)
-        st.write("This model was trained on Apple Silicon (MPS) and is loaded via Streamlit.")
+        st.write("This CNN model was trained on Apple Silicon (MPS) and is loaded via Streamlit.")
         
         st.markdown("---")
         st.subheader("Try It Out: Image Prediction")
@@ -98,8 +107,8 @@ if __name__ == '__main__':
                 
                 # 1. Preprocessing (MUST match training transform)
                 transform = transforms.Compose(
-                    [transforms.Resize((32, 32)),  # Resize image to 32x32 pixels
-                     transforms.ToTensor(),         # Convert to PyTorch tensor
+                    [transforms.Resize((32, 32)),  
+                     transforms.ToTensor(),         
                      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
                 
                 # Apply transform to the PIL image
@@ -116,7 +125,7 @@ if __name__ == '__main__':
                 predicted_class = CLASSES[predicted_idx.item()]
                 
                 # 3. Display Result
-                st.markdown(f"### Model Prediction: **{predicted_class.upper()}**")
+                st.success(f"### Prediction: {predicted_class.upper()}")
                 
                 # Optional: Display confidence scores
                 probabilities = F.softmax(output, dim=1)[0] * 100
@@ -124,4 +133,4 @@ if __name__ == '__main__':
                 
                 st.caption("Top 3 Confidences:")
                 for i in range(top_prob.size(0)):
-                    st.write(f"- {CLASSES[top_catid[i]]}: {top_prob[i].item():.2f}%")
+                    st.write(f"- **{CLASSES[top_catid[i]]}**: {top_prob[i].item():.2f}%")
