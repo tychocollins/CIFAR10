@@ -19,13 +19,13 @@ class Net(nn.Module):
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10) 
 
-    def forward(self, x):
+def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
         x = torch.flatten(x, 1) 
-        x = F.relu(x.fc1(x))
-        x = F.relu(x.fc2(x))
-        x = x.fc3(x) 
+        x = F.relu(self.fc1(x)) # CORRECT: Call the layer on the object self
+        x = F.relu(self.fc2(x)) # CORRECT: Call the layer on the object self
+        x = self.fc3(x)         # CORRECT: Call the layer on the object self
         return x
 
 # --- 2. MODEL LOADING AND ACCURACY CALCULATION ---
