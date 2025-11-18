@@ -7,3 +7,7 @@ Training a Convolutional Neural Network to classify 10 object classes (cats, dog
 **Technology:**
 PyTorch, CNN Architecture, Python, Apple Silicon/MPS (GPU) acceleration.
 Performance	Highlight: final accuracy: 63% on the 10,000 image test set.
+
+https://cifar101.streamlit.app/
+
+
